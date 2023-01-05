@@ -22,18 +22,27 @@ export class WordreferenceService {
             this.findHTML(word, lang)
             .then(res => {
                 const parsed = parse(res)
+                //base modes: infinitive, participle, etc
+                const baseModeList = parsed.getElementById('cheader').getElementsByTagName('td')[0]
+                const baseModeIndex = baseModeList.getElementsByTagName('strong')[0].innerHTML.split('<br>').findIndex(m => this.compareTexts(m, mode))
+                if(baseModeIndex >= 0) resolve({
+                    word,
+                    conj: this.processText(baseModeList.nextElementSibling.innerHTML.split('<br>')[baseModeIndex]),
+                    src: 'wordreference', lang, mode, time, person
+                })
+                //complex modes, with time and person: indicative, subjunctive, etc
                 parsed.querySelectorAll('.aa').forEach(e => {
-                    if (e.getElementsByTagName('h4').some(h => h.textContent.toLowerCase() === mode.toLowerCase())){
+                    if (e.getElementsByTagName('h4').some(h => this.compareTexts(h.textContent, mode))){
                         e.getElementsByTagName('th').forEach(t => {
-                            if (t.getAttribute('scope') === 'col' && t.textContent.split('ⓘ')[0].toLowerCase() === time.toLowerCase()) {
+                            if (this.compareTexts(t.getAttribute('scope'), 'col') && this.compareTexts(t.textContent.split('ⓘ')[0], time)) {
                                 const timeRow = t.parentNode;
                                 var conjRow = timeRow.nextElementSibling;
                                 while (conjRow){
                                     const conj = conjRow.getElementsByTagName('th')[0]
-                                    if(conj.getAttribute('scope') === 'row' && conj.textContent.toLowerCase() === person.toLowerCase()){
+                                    if(this.compareTexts(conj.getAttribute('scope'), 'row') && this.compareTexts(conj.textContent, person)){
                                         resolve({
                                             word,
-                                            conj: conj.nextElementSibling.textContent,
+                                            conj: this.processText(conj.nextElementSibling.textContent),
                                             src: 'wordreference', lang, mode, time, person
                                         })
                                     }
@@ -49,4 +58,22 @@ export class WordreferenceService {
             })
         })
     }
+
+    compareTexts(A: string, B: string){
+        const A_proc = this.processText(A)
+        const B_proc = this.processText(B)
+        return A_proc === B_proc
+    }
+
+    processText = (T: string) => parse(T).innerText.toLowerCase().replace(/[^(A-z)(0-9)(á-ú)\s]/g, '').replace(/^\s+|\s+$/g, '').replace(/\s+/g, ' ').replace(' ', '_')
+    /* 
+    ProcessText Description
+    - parsing + innerText: some conjugations are only separated by <br> so we need to use innerHTML in the search instead of innerText, but then inside the
+    conjugation they have inner tags like <b> or <a> so we parse them back and get the inner text alone
+    - toLowerCase: obvious
+    - replace [many]: delete all symbols that are not spaces or words 
+    - replace ^\s+|\s+$: delete trailing spaces
+    - replace \s+: replaces repeated spaces with only one, mainly from last replace
+    - replace ' ': changes remaining spaces with underscore for proper querying
+    */
 }
